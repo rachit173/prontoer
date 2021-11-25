@@ -50,7 +50,7 @@ cpu_info.o: cpu_info.cc
 ordered_map: ordered_map.cc ${TARGET}
 	$(CXX) $(CXXFLAGS) -lpmemobj -luuid -pthread ${TARGET} -o $@ $<
 
-$(TARGET): nv_log.o thread.o cpu_info.o
+$(TARGET): nv_object.o nv_log.o thread.o cpu_info.o
 	$(AR) rvs $@ $^
 
 main.o: main.cc
@@ -63,3 +63,4 @@ clean:
 	rm -f *.o
 	rm -f ${TARGET}
 	rm -f ordered_map
+	rm -f tester
