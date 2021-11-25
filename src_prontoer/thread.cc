@@ -261,7 +261,7 @@ void Savitar_core_free(int core_id) {
 //     sync_buffer[active_tx_id].method_tag = 0;
 // }
 
-// void Savitar_thread_notify(int num, ...) {
+void Savitar_thread_notify(int num, ...) {
 // #ifdef DEBUG
 //     PRINT("[%d] Notifying persister with %d arguments!\n",
 //             (int)pthread_self(), num);
@@ -327,9 +327,9 @@ void Savitar_core_free(int core_id) {
 //             (int)pthread_self(), obj_uuid_str, tx_buffer[0]);
 //     cycles[1] = rdtscp();
 // #endif
-// }
+}
 
-// void Savitar_thread_wait(PersistentObject *object, SavitarLog *log) {
+void Savitar_thread_wait(PersistentObject *object, SavitarLog *log) {
 // #ifdef DEBUG
 //     PRINT("[%d] Waiting for persister to commit!\n", (int)pthread_self());
 //     cycles[2] = rdtscp();
@@ -357,4 +357,4 @@ void Savitar_core_free(int core_id) {
 //             sync_buffer[tx_buffer[0]].arg_ptrs[1] - sync_buffer[tx_buffer[0]].arg_ptrs[0],
 //             cycles[3] - cycles[2]);
 // #endif
-// }
+}

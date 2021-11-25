@@ -28,8 +28,10 @@ public:
   PersistentOrderedMap() : PersistentObject(true) {}
   void insert(T key, T value) {
     // TODO: add logging thread
+    Savitar_thread_notify(4, this, InsertTag, key, value);
     v_map->insert(make_pair(key, value));
     // TODO: wait for logging thread to complete
+    Savitar_thread_wait(this, this->log);
   }
   optional<T> get(T key) {
     auto it = v_map->find(key);
@@ -37,7 +39,9 @@ public:
     else return it->second;
   }
   void erase(T key) {
+    Savitar_thread_notify(3, this, EraseTag, key);
     v_map->erase(key);
+    Savitar_thread_wait(this, this->log);
   }
 
   static PersistentObject *BaseFactory(uuid_t id) {

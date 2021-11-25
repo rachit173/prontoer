@@ -3,6 +3,8 @@
 #include <pthread.h>
 #include <stdarg.h>
 #include "constants.h"
+#include "nv_log.h"
+#include "nv_object.h"
 
 typedef struct NvMethodCall {
     uint64_t obj_ptr;
@@ -42,4 +44,4 @@ void Savitar_thread_notify(int, ...);
  * The main thread waits for the logger thread to finish logging
  * through calling this function.
  */
-// void Savitar_thread_wait(PersistentObject *, SavitarLog *log);
+void Savitar_thread_wait(PersistentObject *, SavitarLog *log);
