@@ -1,4 +1,8 @@
+
 # Pronto: Easy and Fast Persistence for Volatile Data Structures
+
+## Note: This source code is updated from pronto source code for which git repo could not be found. Thus uploading the source code that was on another site.
+
 Pronto is a new NVM library that reduces the programming effort required to add persistence to volatile data structures.
 It uses asynchronous semantic logging (ASL), which is generic enough to allow programmers to add persistence to the existing volatile data structure (e.g., C++ Standard Template Library containers) with very little programming effort.
 ASL can also move most durability code off the critical path. For more information, check out our ASPLOS'20 submission.
