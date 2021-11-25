@@ -11,6 +11,7 @@
 #include <fstream>
 #include <string>
 #include <cassert>
+#include <optional>
 
 #include "thread.h"
 #include "nv_log.h"
@@ -29,6 +30,11 @@ public:
     // TODO: add logging thread
     v_map->insert(make_pair(key, value));
     // TODO: wait for logging thread to complete
+  }
+  optional<T> get(T key) {
+    auto it = v_map->find(key);
+    if (it == v_map->end()) return nullopt;
+    else return it->second;
   }
   void erase(T key) {
     v_map->erase(key);
@@ -128,6 +134,14 @@ int main(int argc, char* argv[]) {
   }
   uuid_t pom_id = "persistent_map";
   PersistentOrderedMap* pom = PersistentOrderedMap::Factory(pom_id);
+  char key[] = "abcd";
+  char value[] = "xyzw";
+  pom->insert(key, value);
+  auto val = pom->get(key);
+  if (val.has_value()) {
+    std::cout << *val << std::endl;
+  }
+
   Savitar_core_finalize();
   return 0;
 }
