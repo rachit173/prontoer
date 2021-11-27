@@ -44,13 +44,19 @@ nv_factory.o: nv_factory.cc nv_factory.h
 thread.o: thread.cc thread.h constants.h
 	$(CXX) -c $(CXXFLAGS) -o $@ $<
 
+worker.o: worker.cc worker.h constants.h
+	$(CXX) -c $(CXXFLAGS) -o $@ $<
+
+persister.o: persister.cc persister.h
+	$(CXX) -c $(CXXFLAGS) -o $@ $<
+
 cpu_info.o: cpu_info.cc
 	$(CXX) -c $(CXXFLAGS) -o $@ $^
 
 ordered_map: ordered_map.cc ${TARGET}
 	$(CXX) $(CXXFLAGS) -lpmemobj -luuid -pthread ${TARGET} -o $@ $<
 
-$(TARGET): nv_object.o nv_log.o thread.o cpu_info.o
+$(TARGET): nv_object.o nv_log.o thread.o cpu_info.o persister.o worker.o
 	$(AR) rvs $@ $^
 
 main.o: main.cc

@@ -5,6 +5,8 @@
 #include "constants.h"
 #include "nv_log.h"
 #include "nv_object.h"
+#include "persistent_ordered_set.h"
+#include <functional>
 
 typedef struct NvMethodCall {
     uint64_t obj_ptr;
@@ -29,8 +31,12 @@ typedef struct ThreadConfig {
 void Savitar_core_init();
 void Savitar_core_finalize();
 
-// int Savitar_thread_create(pthread_t *, const pthread_attr_t *,
-//     void *(*start_routine)(void *), void *);
+typedef int (*MainFunction)(int, char **);
+
+int Savitar_main(MainFunction, int, char **);
+
+int Savitar_thread_create(pthread_t *, const pthread_attr_t *,
+    void *(*start_routine)(void *), void *);
 
 /*
  * The main thread communicates with the logger thread through

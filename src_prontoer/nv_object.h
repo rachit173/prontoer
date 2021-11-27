@@ -27,9 +27,7 @@ class PersistentObject {
         virtual uint64_t Log(uint64_t, uint64_t *) = 0;
 
         inline uint64_t AppendLog(ArgVector *vector, int v_size) {
-          // TODO(rrt)
-          return 0;
-            // return Savitar_log_append(this->log, vector, v_size);
+            return Savitar_log_append(this->log, vector, v_size);
         }
 
         inline unsigned char *getUUID() const {
@@ -85,7 +83,17 @@ class PersistentObject {
 
         // Called by the NVM Manager through Recover()
         virtual size_t Play(uint64_t tag, uint64_t *args, bool dry) = 0;
+        void LogInsert(uint64_t key) {
+            
+        }
+        void LogInsertWait() {
 
+        }
+        void LogRemove(uint64_t offset) {
+        }
+        void LogRemoveWait() {
+
+        }
         /*
          * Constructor arguments buffer
          * Filled by the constructor method of child objects.
@@ -108,6 +116,8 @@ class PersistentObject {
 
             SavitarLog *log = NULL;
         };
+        // persistent state specific data structures.
+        std::vector<uint64_t> free_slots;
 
         // commit id of the last played log entry
         // TODO(rrt): Remove the last_played_commit_id
