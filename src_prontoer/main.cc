@@ -29,8 +29,8 @@ PersistentOrderedSet* pom;
 void workerFunction(PersistentOrderedSet* obj) {
   function<void()> start_routine = [&obj](){
     // TODO: replace with benchmark code.
-    obj->insert(4);
-    auto ret = obj->get(4); 
+    obj->insert(42);
+    auto ret = obj->get(42); 
     if (ret != nullopt) {
       cout << "Got: " << *ret << endl; 
     } else {

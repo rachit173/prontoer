@@ -4,8 +4,11 @@
 #include <assert.h>
 #include <cstdio>
 #include <cstdlib>
+#include <queue>
+
 #include "nv_log.h"
 #include "nvm_manager.h"
+#include "constants.h"
 
 class NVManager;
 
@@ -76,24 +79,25 @@ class PersistentObject {
         //         return false;
         //     return true;
         // }
-
+        RedoLog* getLog() { return log; }
+        void AddFreeSlot(uint64_t slot_index) {
+            // TODO(rrt): Need to lock when adding free slot.
+            free_slots.push(slot_index);
+        }
+        bool HasFreeSlot() {
+            return !free_slots.empty();
+        }
+        uint64_t GetFreeSlot() {
+            uint64_t slot = free_slots.front();
+            free_slots.pop();
+            return slot;
+        }
     protected:
         // Called by NVM Manager during the recovery process
         void Recover();
 
         // Called by the NVM Manager through Recover()
         virtual size_t Play(uint64_t tag, uint64_t *args, bool dry) = 0;
-        void LogInsert(uint64_t key) {
-            
-        }
-        void LogInsertWait() {
-
-        }
-        void LogRemove(uint64_t offset) {
-        }
-        void LogRemoveWait() {
-
-        }
         /*
          * Constructor arguments buffer
          * Filled by the constructor method of child objects.
@@ -114,10 +118,10 @@ class PersistentObject {
             uint8_t assigned = 0;
             uint8_t recovering = 0;
 
-            SavitarLog *log = NULL;
+            RedoLog *log = NULL;
         };
         // persistent state specific data structures.
-        std::vector<uint64_t> free_slots;
+        std::queue<uint64_t> free_slots;
 
         // commit id of the last played log entry
         // TODO(rrt): Remove the last_played_commit_id

@@ -19,7 +19,7 @@
 #include <thread>
 
 #include "nv_object.h"
-
+#include "worker.h"
 
 using namespace std;
 
@@ -29,10 +29,10 @@ public:
   typedef set<T, less<T>> SetType;
   PersistentOrderedSet(uuid_t id) : PersistentObject(id) {}
   void insert(T key) {
-    this->LogInsert(key);
+    LogInsert(key, this);
     std::unique_lock lock(mutex_);
     v_set.insert(key);
-    this->LogInsertWait();
+    LogInsertWait(this, log);
     // lock released
   }
   optional<T> get(T key) {
@@ -42,10 +42,11 @@ public:
     else return *it;
   }
   void erase(T key) {
-    this->LogRemove(key);
+    uint64_t offset = 0;
+    LogRemove(offset, this);
     std::unique_lock lock(mutex_);
     v_set.erase(key);
-    this->LogRemoveWait();
+    LogRemoveWait(this, log);
     // lock released
   }
 

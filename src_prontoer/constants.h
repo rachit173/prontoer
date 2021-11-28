@@ -25,3 +25,25 @@
 #else
 #define PRINT(format, ...)          {}
 #endif
+
+// Thread data structures
+typedef struct NvMethodCall {
+    uint64_t obj_ptr;
+    uint64_t method_tag;
+    uint64_t arg_ptrs[BUFFER_SIZE - 2];
+    uint64_t offset;
+} NvMethodCall;
+
+typedef struct TxBuffers {
+    NvMethodCall *buffer;
+    uint64_t *tx_buffer;
+    int thread_id; // pthread_self() for main thread
+} TxBuffers;
+
+typedef struct ThreadConfig {
+    int core_id;
+    NvMethodCall *buffer;
+    uint64_t *tx_buffer;
+    void *(*routine)(void *);
+    void *argument;
+} ThreadConfig;
