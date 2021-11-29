@@ -5,7 +5,6 @@
 #include "nv_object.h"
 #include "nv_log.h"
 #include "thread.h"
-#include "nvm_manager.h"
 #include "recovery_context.h"
 
 /*

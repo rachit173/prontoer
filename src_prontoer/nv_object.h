@@ -7,7 +7,6 @@
 #include <queue>
 
 #include "nv_log.h"
-#include "nvm_manager.h"
 #include "constants.h"
 
 class NVManager;
@@ -127,6 +126,6 @@ class PersistentObject {
         // TODO(rrt): Remove the last_played_commit_id
         // uint64_t last_played_commit_id;
 
-        friend class NVManager;
+        // friend class NVManager;
         friend class Snapshot;
 };

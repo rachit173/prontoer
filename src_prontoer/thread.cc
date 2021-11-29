@@ -5,7 +5,6 @@
 #include "thread.h"
 #include <functional>
 #include "persister.h"
-#include "nvm_manager.h"
 #include "recovery_context.h"
 
 void get_cpu_info(uint8_t *core_map, int *map_size);
