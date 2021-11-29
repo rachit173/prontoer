@@ -5,7 +5,7 @@ CXXFLAGS+=-ggdb
 CXXFLAGS+=-fno-stack-protector
 CXXFLAGS+=-o3
 LDFLAGS=-I./ -pthread -lpmem -luuid
-TARGET=libsavitar.a
+TARGET=libprontoer.a
 
 ifdef DEBUG
 CXXFLAGS+=-DDEBUG
