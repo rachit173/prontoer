@@ -4,7 +4,6 @@
 #include <queue>
 #include "nv_object.h"
 #include "nv_log.h"
-#include "recovery_context.h"
 
 /*
  * Constructor is only called for new objects:
