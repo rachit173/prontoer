@@ -35,16 +35,13 @@ nv_object.o: nv_object.cc nv_object.h
 worker.o: worker.cc worker.h constants.h
 	$(CXX) -c $(CXXFLAGS) -o $@ $<
 
-ordered_map: ordered_map.cc ${TARGET}
-	$(CXX) $(CXXFLAGS) -lpmemobj -luuid -pthread ${TARGET} -o $@ $<
-
 $(TARGET): nv_object.o nv_log.o worker.o
 	$(AR) rvs $@ $^
 
 main.o: main.cc
 	$(CXX) -c $(CXXFLAGS) -o $@ $^
 
-tester: main.o ${TARGET}
+tester: main.o ${TARGET} persistent_ordered_set.h
 	$(CXX) $(CXXFLAGS) $^ -o $@ -luuid -pthread -lpmem 
 
 clean:
