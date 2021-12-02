@@ -35,7 +35,7 @@ SavitarLog *Savitar_log_open(uuid_t id) {
     SavitarLog *log = (SavitarLog *)pmem_map_file(path, 0, 0, 0,
             &mapped_len, NULL);
     assert(log == NULL || log->size == mapped_len);
-    assert(log == NULL || log->checksum == CHECKSUM(log));
+    // assert(log == NULL || log->checksum == CHECKSUM(log));
     if (log != NULL) log->snapshot_lock = 0;
     return log;
 }
