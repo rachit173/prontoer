@@ -11,7 +11,7 @@
 
 #include "constants.h"
 #include "nv_object.h"
-
+#define SLOT_SIZE 64
 static const uint64_t LogMagic = REDO_LOG_MAGIC;
 static const uint64_t NoLogMagic = 0;
 static int available_cores = 0; // including Hyper-Threaded cores
@@ -366,7 +366,7 @@ uint64_t LogInsertWait(PersistentObject* object, RedoLog* log) {
   assert(tx_buffer[0] > 0);
   uint64_t log_offset = sync_buffer[tx_buffer[0] - 1].offset;
   logCommit(log, tx_buffer[tx_buffer[0]--]);
-  return log_offset;
+  return (log_offset-log->head)/SLOT_SIZE;
 }
 void LogRemove(uint64_t offset, PersistentObject* object) {
   // Add to tx buffer

@@ -28,9 +28,9 @@ public:
   typedef uint64_t SlotIndexType;
   typedef map<KeyType, SlotIndexType> SetType;
   void insert(KeyType key) {
-    if (get(key).has_value()) return; // Read before to check if key already logged.
-    LogInsert(key, this);
     std::unique_lock lock(mutex_);
+    if (v_set.find(key) != v_set.end()) return; // Read before to check if key already logged.
+    LogInsert(key, this);
     auto it =  v_set.insert({key, 0}).first;
     uint64_t slot_index = LogInsertWait(this, log);
     it->second = slot_index;
@@ -42,17 +42,19 @@ public:
     if (it == v_set.end()) return nullopt;
     else return it->first;
   }
-  optional<SlotIndexType> getSlotIndex(KeyType key) {
-    std::shared_lock lock(mutex_);
-    auto it = v_set.find(key);
-    if (it == v_set.end()) return nullopt;
-    else return it->second;
-  }
+  // optional<SlotIndexType> getSlotIndex(KeyType key) {
+  //   std::shared_lock lock(mutex_);
+  //   auto it = v_set.find(key);
+  //   if (it == v_set.end()) return nullopt;
+  //   else return it->second;
+  // }
   void erase(KeyType key) {
-    auto slot_index = getSlotIndex(key);
-    if (!slot_index.has_value()) return;
-    LogRemove(*slot_index, this);
     std::unique_lock lock(mutex_);
+    auto it = v_set.find(key);
+    if (it == v_set.end()) return;
+    auto slot_index = it->second;
+    LogRemove(slot_index, this);
+    // std::unique_lock lock(mutex_);
     v_set.erase(key);
     LogRemoveWait(this, log);
     // lock released
