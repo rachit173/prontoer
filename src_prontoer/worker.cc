@@ -358,6 +358,7 @@ void logCommit(RedoLog* log, uint64_t offset) {
 uint64_t LogInsertWait(PersistentObject* object, RedoLog* log) {
   // Wait for tx buffer to complete the work
 #ifndef SYNC_SL
+    // TODO (Abhinav): Optimize spin lock
     while (sync_buffer[tx_buffer[0] - 1].method_tag != 0) { } // spin lock
 #endif // SYNC_SL
   assert(tx_buffer[0] > 0);
@@ -398,7 +399,9 @@ void logUncommit(RedoLog* log, uint64_t offset) {
 void LogRemoveWait(PersistentObject* object, RedoLog* log) {
     // Wait for the tx buffer to complete the work
 #ifndef SYNC_SL
-    while (sync_buffer[tx_buffer[0] - 1].method_tag != 0) { } // spin lock
+    while (sync_buffer[tx_buffer[0] - 1].method_tag != 0) { 
+        // TODO(Abhinav): Asm volatile pause.
+    } // spin lock
 #endif // SYNC_SL
     assert(tx_buffer[0] > 0);
     uint64_t log_offset = sync_buffer[tx_buffer[0]-1].offset;    

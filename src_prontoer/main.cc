@@ -24,7 +24,6 @@
 #include "nv_object.h"
 #include "persistent_ordered_set.h"
 using namespace std;
-PersistentOrderedSet* pom;
 
 void workerFunction(PersistentOrderedSet* obj) {
   function<void()> start_routine = [&obj](){
