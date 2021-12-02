@@ -56,11 +56,17 @@ void workerFunction(PersistentOrderedSet* obj, Workload workload) {
       switch (op.first)
       {
       case Insert:
-        obj->insert(key);
-        break;
+        {
+          obj->insert(key);
+          std::cout << "Inserted: " << key << "\n";
+          break;
+        }
       case Remove:
-        obj->erase(key);
-        break;
+        {
+          obj->erase(key);
+          std::cout << "Removed: " << key << "\n";
+          break;
+        }
       case Get:
         {
           auto ret = obj->get(key);
@@ -69,6 +75,7 @@ void workerFunction(PersistentOrderedSet* obj, Workload workload) {
           } else {
             cout << "Did not find key\n";
           }
+          break;
         }
       default:
         /* op not found */
@@ -84,13 +91,18 @@ void workerFunction(PersistentOrderedSet* obj, Workload workload) {
 int main(int argc, char* argv[]) {
   coreInit();
   cout << "savitar core finalize" << endl;
-  uuid_t pom_id = "persistent_map";
+  uuid_t pom_id = "persistent_set";
   PersistentOrderedSet* pom = PersistentOrderedSet::Factory(pom_id);
   int num_workers = 2;
   vector<thread> workers;
   Workload work[num_workers];
   // Generate workloads for all threads.
   for (int i = 0; i < num_workers; i++) {
+    work[i].addOperation(Get, 42);
+    work[i].addOperation(Insert, 42);
+    work[i].addOperation(Get, 42);
+    work[i].addOperation(Remove, 42);
+    work[i].addOperation(Get, 42);
     work[i].addOperation(Insert, 42);
     work[i].addOperation(Get, 42);
   }
