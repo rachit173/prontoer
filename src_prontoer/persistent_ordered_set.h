@@ -24,25 +24,34 @@ using namespace std;
 
 class PersistentOrderedSet : PersistentObject {
 public:
-  typedef uint64_t T;
-  typedef set<T, less<T>> SetType;
-  void insert(T key) {
+  typedef uint64_t KeyType;
+  typedef uint64_t SlotIndexType;
+  typedef map<KeyType, SlotIndexType> SetType;
+  void insert(KeyType key) {
     if (get(key).has_value()) return; // Read before to check if key already logged.
     LogInsert(key, this);
     std::unique_lock lock(mutex_);
-    v_set.insert(key);
-    uint64_t offset = LogInsertWait(this, log);
+    auto it =  v_set.insert({key, 0}).first;
+    uint64_t slot_index = LogInsertWait(this, log);
+    it->second = slot_index;
     // lock released
   }
-  optional<T> get(T key) {
+  optional<KeyType> get(KeyType key) {
     std::shared_lock lock(mutex_);
     auto it = v_set.find(key);
     if (it == v_set.end()) return nullopt;
-    else return *it;
+    else return it->first;
   }
-  void erase(T key) {
-    uint64_t offset = 0;
-    LogRemove(offset, this);
+  optional<SlotIndexType> getSlotIndex(KeyType key) {
+    std::shared_lock lock(mutex_);
+    auto it = v_set.find(key);
+    if (it == v_set.end()) return nullopt;
+    else return it->second;
+  }
+  void erase(KeyType key) {
+    auto slot_index = getSlotIndex(key);
+    if (!slot_index.has_value()) return;
+    LogRemove(*slot_index, this);
     std::unique_lock lock(mutex_);
     v_set.erase(key);
     LogRemoveWait(this, log);
@@ -63,16 +72,16 @@ public:
       printf("Currently not implemented in prontoer");
       assert(false);
   }
-  size_t Play(uint64_t tag, uint64_t *args, bool dry) override {
+  size_t Play(uint64_t tag, uint64_t *args, SlotIndexType slot_index, bool dry) override {
       size_t bytes_processed = 0;
       switch (tag) {
           case InsertTag:
               {
-                T key = *((T*)args);
+                KeyType key = *((KeyType*)args);
                 if (!dry) {
-                  volatile_insert(key);
+                  volatile_insert(key, slot_index);
                 }
-                bytes_processed = sizeof(T);
+                bytes_processed = sizeof(KeyType);
               }
               break;
           case EraseTag:
@@ -99,11 +108,11 @@ private:
       PersistentOrderedSet *object = new PersistentOrderedSet(id);
       return object;
   }
-  void volatile_insert(T key) {
+  void volatile_insert(KeyType key, SlotIndexType slot_index) {
     std::unique_lock lock(mutex_);
-    v_set.insert(key);
+    v_set.insert({key, slot_index});
   }
-  void volatile_remove(T key) {
+  void volatile_remove(KeyType key) {
     std::unique_lock lock(mutex_);
     v_set.erase(key);
   }

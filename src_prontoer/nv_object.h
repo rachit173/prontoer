@@ -96,7 +96,7 @@ class PersistentObject {
         void Recover();
 
         // Called by the NVM Manager through Recover()
-        virtual size_t Play(uint64_t tag, uint64_t *args, bool dry) = 0;
+        virtual size_t Play(uint64_t tag, uint64_t *args, uint64_t slot_index, bool dry) = 0;
         /*
          * Constructor arguments buffer
          * Filled by the constructor method of child objects.

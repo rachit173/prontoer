@@ -141,9 +141,9 @@ void PersistentObject::Recover() {
             AddFreeSlot(slot_index);
         } else { // filled slot.
             uint64_t data_offset = magic_offset + sizeof(uint64_t);
-            uint64_t key = *((uint64_t*)(ptr + data_offset));
+            uint64_t* args = ((uint64_t*)(ptr + data_offset));
             uint64_t op_tag = 1; // Insert operation
-            this->Play(1, &key, false);            
+            this->Play(op_tag, args, slot_index, false);            
         }
         ptr += slot_size;
         slot_index++;
