@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <queue>
+#include <optional>
+#include <mutex>
 
 #include "nv_log.h"
 #include "constants.h"
@@ -81,12 +83,12 @@ class PersistentObject {
         RedoLog* getLog() { return log; }
         void AddFreeSlot(uint64_t slot_index) {
             // TODO(rrt): Need to lock when adding free slot.
+            std::lock_guard<std::mutex> guard(free_slots_mutex_);
             free_slots.push(slot_index);
         }
-        bool HasFreeSlot() {
-            return !free_slots.empty();
-        }
-        uint64_t GetFreeSlot() {
+        std::optional<uint64_t> GetFreeSlot() {
+            std::lock_guard<std::mutex> guard(free_slots_mutex_);
+            if (free_slots.empty()) return std::nullopt;
             uint64_t slot = free_slots.front();
             free_slots.pop();
             return slot;
@@ -121,6 +123,7 @@ class PersistentObject {
         };
         // persistent state specific data structures.
         std::queue<uint64_t> free_slots;
+        std::mutex free_slots_mutex_;
 
         // commit id of the last played log entry
         // TODO(rrt): Remove the last_played_commit_id

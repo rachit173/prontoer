@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <functional>
+#include <optional>
 #include <thread>
 #include <cassert>
 
@@ -153,19 +154,20 @@ static __thread uint64_t *tx_buffer;
 uint64_t logAppend(PersistentObject* object, uint64_t* arg_ptrs) {
 
     RedoLog* log = object->getLog();
-    size_t entry_size = 2 * sizeof(uint64_t); // Hole for commit_id and log magic
+    size_t slot_size = 2 * sizeof(uint64_t); // Hole for commit_id and log magic
     uint64_t key = arg_ptrs[0];
-    entry_size += sizeof(key);
-    if (entry_size % CACHE_LINE_WIDTH != 0) {
-        entry_size += CACHE_LINE_WIDTH - (entry_size % CACHE_LINE_WIDTH);
+    slot_size += sizeof(key);
+    if (slot_size % CACHE_LINE_WIDTH != 0) {
+        slot_size += CACHE_LINE_WIDTH - (slot_size % CACHE_LINE_WIDTH);
     }
+    auto slot_index = object->GetFreeSlot();
     uint64_t offset;
-    if (object->HasFreeSlot()) {
-        offset = object->GetFreeSlot();
+    if (slot_index.has_value()) {
+        offset = log->head + (*slot_index) * slot_size; 
     } else {
-        offset = __sync_fetch_and_add(&log->tail, entry_size);        
+        offset = __sync_fetch_and_add(&log->tail, slot_size);        
+        assert(offset + slot_size <= log->size);
     }
-    assert(offset + entry_size <= log->size);
     char* dst = (char*)log + offset + sizeof(uint64_t); // Hole for commit_id
 
     pmem_memcpy_nodrain(dst, &LogMagic, sizeof(LogMagic));
