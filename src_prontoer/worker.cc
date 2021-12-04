@@ -151,48 +151,54 @@ static __thread NvMethodCall *sync_buffer;
  */
 static __thread uint64_t *tx_buffer;
 
-uint64_t logAppend(PersistentObject* object, uint64_t* arg_ptrs) {
-
+uint64_t logInsert(PersistentObject* object, uint64_t* arg_ptrs) {
     RedoLog* log = object->getLog();
-    size_t slot_size = 2 * sizeof(uint64_t); // Hole for commit_id and log magic
-    uint64_t key = arg_ptrs[0];
-    slot_size += sizeof(key);
-    if (slot_size % CACHE_LINE_WIDTH != 0) {
-        slot_size += CACHE_LINE_WIDTH - (slot_size % CACHE_LINE_WIDTH);
-    }
-    auto slot_index = object->GetFreeSlot();
+    auto slot_offset = object->GetFreeSlot();
     uint64_t offset;
-    if (slot_index.has_value()) {
-        offset = log->head + (*slot_index) * slot_size; 
+    if (slot_offset.has_value()) {
+        offset = log->head + (*slot_offset); 
     } else {
-        offset = __sync_fetch_and_add(&log->tail, slot_size);        
-        assert(offset + slot_size <= log->size);
+        offset = __sync_fetch_and_add(&log->tail, object->slot_size);        
+        assert(offset + object->slot_size <= log->size);
     }
-    char* dst = (char*)log + offset + sizeof(uint64_t); // Hole for commit_id
-
-    pmem_memcpy_nodrain(dst, &LogMagic, sizeof(LogMagic));
-    dst += sizeof(uint64_t);
-    pmem_memcpy_nodrain(dst, &key, sizeof(key));
+    char* dst = (char*)log + offset + 2*sizeof(uint64_t); // Hole for commit_id and magic_id.
+    pmem_memcpy_nodrain(dst, &arg_ptrs[0], sizeof(uint64_t)); // Copying key to PM.
     pmem_drain();
+    // TODO(opt): only needs to be performed when appended to log tail.
     pmem_persist(&log->tail, sizeof(log->tail));
     return offset;
 }
 
-void logRemove(PersistentObject* object, uint64_t* arg_ptrs) {
+inline void logRemove(PersistentObject* object, uint64_t* arg_ptrs) {
     RedoLog* log = object->getLog();
     uint64_t offset = arg_ptrs[0];
 
-    uint64_t entry_size = 3 * sizeof(uint64_t);
-    assert(offset + entry_size <= log->size);
+    // uint64_t entry_size = 3 * sizeof(uint64_t);
+    assert(offset + object->slot_size <= log->size);
     char* dst = (char*)log + offset + sizeof(uint64_t); // Hole for commit_id
     pmem_memcpy_nodrain(dst, &NoLogMagic, sizeof(NoLogMagic));
     pmem_drain();
     object->AddFreeSlot(offset);
 }
 
+void logRemove2(PersistentObject* object, uint64_t* arg_ptrs) {
+    RedoLog* log = object->getLog();
+    uint64_t offset = arg_ptrs[0];
+
+    // uint64_t entry_size = 3 * sizeof(uint64_t);
+    // assert(offset + entry_size <= log->size);
+    assert(offset + object->slot_size <= log->size);
+    char* dst = (char*)log + offset + sizeof(uint64_t); // Hole for commit_id
+    pmem_memcpy_nodrain(dst, &NoLogMagic, sizeof(NoLogMagic));
+    pmem_drain();
+    // Following operation moved to LogRemoveWait2
+    // This is difference between LogRemove, and LogRemove2.
+    // object->AddFreeSlot(offset);
+}
+
 void loggerRoutine(PersistentObject* object) {
   uint64_t active_tx_id = 0;
-
+  const size_t slot_size = object->slot_size;
   while (true) {
     // Wait for main thread to setup buffer
     while (sync_buffer[active_tx_id].method_tag == 0) {
@@ -219,10 +225,13 @@ void loggerRoutine(PersistentObject* object) {
         exit(0);
     } else { // outer-most transaction
         // Delegate log creation to the logger creation.
+        // TODO(rrt): Switch case or if-else?
         if (sync_buffer[active_tx_id].method_tag == 1) {
-            log_offset = logAppend(nv_object, sync_buffer[active_tx_id].arg_ptrs);
+            log_offset = logInsert(nv_object, sync_buffer[active_tx_id].arg_ptrs);
         } else if (sync_buffer[active_tx_id].method_tag == 2) {
             logRemove(nv_object, sync_buffer[active_tx_id].arg_ptrs);
+        } else if (sync_buffer[active_tx_id].method_tag == 3) {
+            logRemove2(nv_object, sync_buffer[active_tx_id].arg_ptrs);
         } else {
             printf("Unsupported method_tag: %ld", sync_buffer[active_tx_id].method_tag);
             fflush(stdout);
@@ -293,18 +302,14 @@ void initializeWorker(std::function<void()>& start_routine, PersistentObject* ob
         tx_buffer = buffer_tx;
         // Set thread core affinity
         pthread_t thread = pthread_self();
-    #ifndef SYNC_SL
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
         CPU_SET(core_id, &cpuset);
         assert(pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset) == 0);
-    #endif // SYNC_SL
         loggerRoutine(obj);
         // clean up
         printf("[%d] Logger thread is now terminating\n", (int)thread);
-    #ifndef SYNC_SL
         coreFree(core_id);
-    #endif // SYNC_SL
     }, core_ids[0]);
 
     auto main_thread = std::thread([&start_routine, &buffer_sync, &buffer_tx](int core_id) {
@@ -312,12 +317,10 @@ void initializeWorker(std::function<void()>& start_routine, PersistentObject* ob
         tx_buffer = buffer_tx;
         // Set thread core affinity
         pthread_t thread = pthread_self();
-    #ifndef SYNC_SL
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
         CPU_SET(core_id, &cpuset);
         assert(pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset) == 0);
-    #endif // SYNC_SL
         start_routine();
         assert(tx_buffer[0] == 0);  // No active transactions
         sync_buffer[0].method_tag = UINT64_MAX;  // Signals logger thread to terminate
@@ -338,74 +341,86 @@ void LogInsert(uint64_t key, PersistentObject* object) {
   // Increment tx buffer store index
   tx_buffer[0]++;
   tx_buffer[tx_buffer[0]] = 0;
-#ifndef SYNC_SL
   asm volatile("sfence" : : : "memory");
-#endif // SYNC_SL
 
   sync_buffer[tx_buffer[0]-1].method_tag = 1;
-#ifdef SYNC_SL
-    Savitar_persister_log(tx_buffer[0] - 1);
-    PRINT("[%d] Finished creating synchronous semantic log\n", (int)pthread_self());
-#endif // SYNC_SL
 }
-void logCommit(RedoLog* log, uint64_t offset) {
+
+inline void logCommit(RedoLog* log, uint64_t offset) {
   uint64_t commit_id = __sync_add_and_fetch(&log->last_commit, 1);
   assert(commit_id < UINT64_MAX);
   uint64_t *ptr = (uint64_t*)((char*)log + offset);
   *ptr = commit_id;
   pmem_persist(ptr, sizeof(commit_id));
+  ptr = (uint64_t*)((char*)log + offset + sizeof(uint64_t));
+  *ptr = LogMagic;
+  pmem_persist(ptr, sizeof(LogMagic));
   printf("[%d] Marked log entry (%zu) as committed with id = %zu\n",
             (int)pthread_self(), offset, commit_id);
 }
+
 uint64_t LogInsertWait(PersistentObject* object, RedoLog* log) {
   // Wait for tx buffer to complete the work
-#ifndef SYNC_SL
-    // TODO (Abhinav): Optimize spin lock
-    while (sync_buffer[tx_buffer[0] - 1].method_tag != 0) { } // spin lock
-#endif // SYNC_SL
+  // TODO~ (Abhinav): Optimize spin lock
+  while (sync_buffer[tx_buffer[0] - 1].method_tag != 0) { } // spin lock
   assert(tx_buffer[0] > 0);
   uint64_t log_offset = sync_buffer[tx_buffer[0] - 1].offset;
   logCommit(log, tx_buffer[tx_buffer[0]--]);
-  return (log_offset-log->head)/SLOT_SIZE;
+  return log_offset;
 }
-void LogRemove(uint64_t offset, PersistentObject* object) {
+
+inline void logUncommit(RedoLog* log, uint64_t offset) {
+    // Empty the log magic
+    uint64_t *ptr = (uint64_t*)((char*)log + offset + sizeof(uint64_t)); // Position for magic
+    *ptr = NoLogMagic;
+    pmem_persist(ptr, sizeof(NoLogMagic));
+}
+
+void LogRemove(uint64_t slot_offset, PersistentObject* object) {
   // Add to tx buffer
   // Similar functionality to Savitar_thread_notify
   sync_buffer[tx_buffer[0]].obj_ptr = (uint64_t)object;
   // Add payload to store
-  sync_buffer[tx_buffer[0]].arg_ptrs[0] = offset;
+  sync_buffer[tx_buffer[0]].arg_ptrs[0] = slot_offset;
 
   // Increment tx buffer store index
   tx_buffer[0]++;
   tx_buffer[tx_buffer[0]] = 0;
-#ifndef SYNC_SL
   asm volatile("sfence" : : : "memory");
-#endif // SYNC_SL
 
   sync_buffer[tx_buffer[0]-1].method_tag = 2;
-#ifdef SYNC_SL
-    Savitar_persister_log(tx_buffer[0] - 1);
-    PRINT("[%d] Finished creating synchronous semantic log\n", (int)pthread_self());
-#endif // SYNC_SL
 }
-void logUncommit(RedoLog* log, uint64_t offset) {
-    // Nothing to do since the log magic has already been emptied.
-//   uint64_t commit_id = __sync_add_and_fetch(&log->last_commit, 1);
-//   assert(commit_id < UINT64_MAX);
-//   uint64_t *ptr = (uint64_t*)((char*)log + offset);
-//   *ptr = 0;
-//   pmem_persist(ptr, sizeof(commit_id));
-//   printf("[%d] Marked log entry (%zu) as committed with id = %zu\n",
-//             (int)pthread_self(), offset, commit_id);
-}
+
 void LogRemoveWait(PersistentObject* object, RedoLog* log) {
     // Wait for the tx buffer to complete the work
-#ifndef SYNC_SL
     while (sync_buffer[tx_buffer[0] - 1].method_tag != 0) { 
         // TODO(Abhinav): Asm volatile pause.
     } // spin lock
-#endif // SYNC_SL
     assert(tx_buffer[0] > 0);
-    uint64_t log_offset = sync_buffer[tx_buffer[0]-1].offset;    
-    logUncommit(log, tx_buffer[tx_buffer[0]--]);
+    tx_buffer[0]--;
+}
+
+void LogRemove2(uint64_t slot_offset, PersistentObject* object) {
+  // Add to tx buffer
+  // Similar functionality to Savitar_thread_notify
+  sync_buffer[tx_buffer[0]].obj_ptr = (uint64_t)object;
+  // Add payload to store
+  sync_buffer[tx_buffer[0]].arg_ptrs[0] = slot_offset;
+
+  // Increment tx buffer store index
+  tx_buffer[0]++;
+  tx_buffer[tx_buffer[0]] = 0;
+  asm volatile("sfence" : : : "memory");
+
+  sync_buffer[tx_buffer[0]-1].method_tag = 3;
+}
+
+void LogRemoveWait2(PersistentObject* object, RedoLog* log) {
+    object->AddFreeSlot(sync_buffer[tx_buffer[0]-1].offset);
+    // Wait for the tx buffer to complete the work
+    while (sync_buffer[tx_buffer[0] - 1].method_tag != 0) { 
+        // TODO(Abhinav): Asm volatile pause.
+    } // spin lock
+    assert(tx_buffer[0] > 0);
+    tx_buffer[0]--;
 }
