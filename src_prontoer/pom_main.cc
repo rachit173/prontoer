@@ -22,19 +22,22 @@
 #include "worker.h"
 #include "nv_log.h"
 #include "nv_object.h"
-#include "persistent_ordered_set.h"
+#include "persistent_ordered_map.h"
 using namespace std;
 
 enum Op { Insert, Remove, Get };
 struct Workload {
   typedef uint64_t KeyType;
+  typedef string ValueType;
+  typedef uint32_t ValueSizeType;
+  typedef pair<Op, pair<KeyType, ValueType>> EntryType;
   private:
-    vector<pair<Op, KeyType>> ops;
+    vector<EntryType> ops;
     size_t i;
   public:
     Workload(): i(0) {}
-    void addOperation(Op op, KeyType key) {
-      ops.push_back({op, key});
+    void addOperation(Op op, KeyType key, ValueType value) {
+      ops.push_back({op, {key, value}});
     }
     void start() {
       i = 0;
@@ -42,22 +45,23 @@ struct Workload {
     bool hasNext() {
       return i < ops.size(); 
     }
-    pair<Op, KeyType> next() {
+    EntryType next() {
       return ops[i++];
     }
 };
 
-void workerFunction(PersistentOrderedSet* obj, Workload workload) {
+void workerFunction(PersistentOrderedMap* obj, Workload workload) {
   function<void()> start_routine = [&obj, &workload](){
     workload.start();
     while (workload.hasNext()) {
       auto op = workload.next();
-      auto key = op.second;
+      uint64_t key = op.second.first;
+      const string& value = op.second.second;
       switch (op.first)
       {
       case Insert:
         {
-          obj->insert(key);
+          obj->insert(key, value.c_str(), value.size()+1); // Include ending null char in value len.
           std::cout << "Inserted: " << key << "\n";
           break;
         }
@@ -71,7 +75,7 @@ void workerFunction(PersistentOrderedSet* obj, Workload workload) {
         {
           auto ret = obj->get(key);
           if (ret != nullopt) {
-            cout << "Got: " << *ret << "\n";  
+            cout << "Got: " << ret->first << "\n";  
           } else {
             cout << "Did not find key\n";
           }
@@ -91,20 +95,20 @@ void workerFunction(PersistentOrderedSet* obj, Workload workload) {
 int main(int argc, char* argv[]) {
   coreInit();
   cout << "savitar core finalize" << endl;
-  uuid_t pom_id = "persistent_set";
-  PersistentOrderedSet* pom = PersistentOrderedSet::Factory(pom_id);
+  uuid_t pom_id = "persistent_map";
+  PersistentOrderedMap* pom = PersistentOrderedMap::Factory(pom_id, 100);
   int num_workers = 2;
   vector<thread> workers;
   Workload work[num_workers];
   // Generate workloads for all threads.
   for (int i = 0; i < num_workers; i++) {
-    work[i].addOperation(Get, 42);
-    work[i].addOperation(Insert, 42);
-    work[i].addOperation(Get, 42);
-    work[i].addOperation(Remove, 42);
-    work[i].addOperation(Get, 42);
-    work[i].addOperation(Insert, 42);
-    work[i].addOperation(Get, 42);
+    work[i].addOperation(Get, 42, "");
+    work[i].addOperation(Insert, 42, "DATA1");
+    work[i].addOperation(Get, 42, "");
+    work[i].addOperation(Remove, 42, "");
+    work[i].addOperation(Get, 42, "");
+    work[i].addOperation(Insert, 42, "DATA2");
+    work[i].addOperation(Get, 42, "");
   }
 
   // Run workload on the different threads with
