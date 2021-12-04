@@ -17,6 +17,7 @@ void initializeWorker(std::function<void()>& start_routine, PersistentObject* ob
 // (LogRemove2 and LogRemoveWait2),
 // are called on the same thread.
 void LogInsert(uint64_t key, PersistentObject* object);
+void LogInsertWithPayload(uint64_t key, const char* payload, size_t len, PersistentObject* object);
 uint64_t LogInsertWait(PersistentObject* object, RedoLog* log);
 void LogRemove(uint64_t slot_offset, PersistentObject* obj);
 void LogRemoveWait(PersistentObject* object, RedoLog* log);

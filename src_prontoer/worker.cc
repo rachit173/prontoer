@@ -169,6 +169,27 @@ uint64_t logInsert(PersistentObject* object, uint64_t* arg_ptrs) {
     return offset;
 }
 
+uint64_t logInsertWithPayload(PersistentObject* object, uint64_t* arg_ptrs) {
+    RedoLog* log = object->getLog();
+    auto slot_offset = object->GetFreeSlot();
+    uint64_t offset;
+    if (slot_offset.has_value()) {
+        offset = log->head + (*slot_offset); 
+    } else {
+        offset = __sync_fetch_and_add(&log->tail, object->slot_size);        
+        assert(offset + object->slot_size <= log->size);
+    }
+    char* slot_ptr = (char*)log + offset;
+    const size_t value_len = arg_ptrs[2];
+    pmem_memcpy_nodrain(slot_ptr, &value_len, sizeof(uint64_t)); // Copying value len to PM.    
+    pmem_memcpy_nodrain(slot_ptr+2*sizeof(uint64_t), &arg_ptrs[0], sizeof(uint64_t)); // Copying key to PM.
+    pmem_memcpy_nodrain(slot_ptr+3*sizeof(uint64_t), (void*)arg_ptrs[1], value_len); // Copying value data to PM.
+    pmem_drain();
+    // TODO(opt): only needs to be performed when appended to log tail.
+    pmem_persist(&log->tail, sizeof(log->tail));
+    return offset;
+}
+
 inline void logRemove(PersistentObject* object, uint64_t* arg_ptrs) {
     RedoLog* log = object->getLog();
     uint64_t offset = arg_ptrs[0];
@@ -232,6 +253,8 @@ void loggerRoutine(PersistentObject* object) {
             logRemove(nv_object, sync_buffer[active_tx_id].arg_ptrs);
         } else if (sync_buffer[active_tx_id].method_tag == 3) {
             logRemove2(nv_object, sync_buffer[active_tx_id].arg_ptrs);
+        } else if (sync_buffer[active_tx_id].method_tag == 4) {
+            log_offset = logInsertWithPayload(nv_object, sync_buffer[active_tx_id].arg_ptrs);
         } else {
             printf("Unsupported method_tag: %ld", sync_buffer[active_tx_id].method_tag);
             fflush(stdout);
@@ -335,7 +358,7 @@ void LogInsert(uint64_t key, PersistentObject* object) {
   // Add to tx buffer
   // Similar functionality to Savitar_thread_notify
   sync_buffer[tx_buffer[0]].obj_ptr = (uint64_t)object;
-  // Add payload to store
+  // Add key to store
   sync_buffer[tx_buffer[0]].arg_ptrs[0] = key;
 
   // Increment tx buffer store index
@@ -344,6 +367,23 @@ void LogInsert(uint64_t key, PersistentObject* object) {
   asm volatile("sfence" : : : "memory");
 
   sync_buffer[tx_buffer[0]-1].method_tag = 1;
+}
+
+void LogInsertWithPayload(uint64_t key, const char* payload, const size_t len, PersistentObject* object) {
+  // Add to tx buffer
+  // Similar functionality to Savitar_thread_notify
+  sync_buffer[tx_buffer[0]].obj_ptr = (uint64_t)object;
+  // Add key to store
+  sync_buffer[tx_buffer[0]].arg_ptrs[0] = key;
+  // Add payload to store
+  sync_buffer[tx_buffer[0]].arg_ptrs[1] = (uint64_t)payload;
+  sync_buffer[tx_buffer[0]].arg_ptrs[2] = len;
+  // Increment tx buffer store index
+  tx_buffer[0]++;
+  tx_buffer[tx_buffer[0]] = 0;
+  asm volatile("sfence" : : : "memory");
+
+  sync_buffer[tx_buffer[0]-1].method_tag = 4;
 }
 
 inline void logCommit(RedoLog* log, uint64_t offset) {
