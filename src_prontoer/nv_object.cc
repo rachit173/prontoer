@@ -91,7 +91,7 @@ void PersistentObject::Recover() {
     printf("[%s] Log tail: %zu\n", uuid_prefix, log->tail);
 
     const uint64_t magic_offset = sizeof(uint64_t);
-    const uint64_t data_offset = magic_offset + sizeof(uint64_t);
+    const uint64_t key_offset = magic_offset + sizeof(uint64_t);
     // Creating data-structures to handle out-of-order entries
     uint64_t slot_offset = log_head;
     while (ptr < limit) {
@@ -101,7 +101,7 @@ void PersistentObject::Recover() {
         if (magic != REDO_LOG_MAGIC) { // free slot
             AddFreeSlot(slot_offset);
         } else { // filled slot.
-            uint64_t* args = ((uint64_t*)(ptr + data_offset));
+            uint64_t* args = ((uint64_t*)(ptr + key_offset));
             uint64_t op_tag = 1; // Insert operation
             this->Play(op_tag, args, slot_offset, false);            
         }
