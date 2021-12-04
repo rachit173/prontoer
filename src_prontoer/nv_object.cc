@@ -95,7 +95,7 @@ void PersistentObject::Recover() {
     // Creating data-structures to handle out-of-order entries
     uint64_t slot_offset = log_head;
     while (ptr < limit) {
-        // 1. Read commit id and method tag from persistent log
+        // 1. Read commit id and magic from persistent log
         uint64_t commit_id = *((uint64_t *)ptr);
         uint64_t magic = *((uint64_t *)(ptr + magic_offset));
         if (magic != REDO_LOG_MAGIC) { // free slot

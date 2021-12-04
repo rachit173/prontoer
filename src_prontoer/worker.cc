@@ -349,14 +349,15 @@ void LogInsert(uint64_t key, PersistentObject* object) {
 inline void logCommit(RedoLog* log, uint64_t offset) {
   uint64_t commit_id = __sync_add_and_fetch(&log->last_commit, 1);
   assert(commit_id < UINT64_MAX);
-  uint64_t *ptr = (uint64_t*)((char*)log + offset);
-  *ptr = commit_id;
-  pmem_persist(ptr, sizeof(commit_id));
+  uint64_t* ptr;
+  // ptr = (uint64_t*)((char*)log + offset);
+  // *ptr = commit_id;
+  // pmem_persist(ptr, sizeof(commit_id));
   ptr = (uint64_t*)((char*)log + offset + sizeof(uint64_t));
   *ptr = LogMagic;
   pmem_persist(ptr, sizeof(LogMagic));
-  printf("[%d] Marked log entry (%zu) as committed with id = %zu\n",
-            (int)pthread_self(), offset, commit_id);
+  // printf("[%d] Marked log entry (%zu) as committed with id = %zu\n",
+  //           (int)pthread_self(), offset, commit_id);
 }
 
 uint64_t LogInsertWait(PersistentObject* object, RedoLog* log) {
