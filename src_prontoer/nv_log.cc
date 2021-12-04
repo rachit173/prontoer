@@ -74,33 +74,6 @@ void Savitar_log_close(SavitarLog *log) {
     PRINT("Closed semantic log: %s\n", uuid);
 }
 
-uint64_t Savitar_log_append(struct RedoLog *log, ArgVector *v, size_t v_size) {
-    assert(v_size > 0);
-    size_t entry_size = 2 * sizeof(uint64_t); // Hole for commit_id and magic
-    for (size_t i = 0; i < v_size; i++) {
-        entry_size += v[i].len;
-    }
-    if (entry_size % CACHE_LINE_WIDTH != 0) {
-        entry_size += CACHE_LINE_WIDTH - (entry_size % CACHE_LINE_WIDTH);
-    }
-
-    uint64_t offset = __sync_fetch_and_add(&log->tail, entry_size);
-    assert(offset + entry_size <= log->size);
-    char *dst = (char *)log + offset + sizeof(uint64_t); // Hole for commit_id
-
-    pmem_memcpy_nodrain(dst, &LogMagic, sizeof(LogMagic));
-    dst += sizeof(uint64_t);
-    for (size_t i = 0; i < v_size; i++) {
-        pmem_memcpy_nodrain(dst, v[i].addr, v[i].len);
-        dst += v[i].len;
-    }
-
-    pmem_drain();
-    pmem_persist(&log->tail, sizeof(log->tail));
-
-    return offset;
-}
-
 void Savitar_log_commit(SavitarLog *log, uint64_t entry_offset) {
     uint64_t commit_id = __sync_add_and_fetch(&log->last_commit, 1);
     assert(commit_id < UINT64_MAX);

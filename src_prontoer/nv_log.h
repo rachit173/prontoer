@@ -22,16 +22,13 @@ typedef struct RedoLog {
     uint64_t snapshot_lock; // temporary value
 } SavitarLog;
 
-typedef struct SavitarVector {
-    void *addr;
-    size_t len;
-} ArgVector;
+// typedef struct SavitarVector {
+//     void *addr;
+//     size_t len;
+// } ArgVector;
 
 SavitarLog *Savitar_log_open(uuid_t);
 SavitarLog *Savitar_log_create(uuid_t, size_t);
 void Savitar_log_close(SavitarLog *);
 
 bool Savitar_log_exists(uuid_t);
-uint64_t Savitar_log_append(SavitarLog *, ArgVector *, size_t);
-// @TODO(rrt): Add log_remove method
-void Savitar_log_commit(SavitarLog *, uint64_t);
