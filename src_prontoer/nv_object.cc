@@ -11,7 +11,7 @@
  * * Every time a persistent object is solely constructed from logs
  * * Constructor is never called when snapshots are used
  */
-PersistentObject::PersistentObject(uuid_t id) {
+PersistentObject::PersistentObject(uuid_t id, size_t slot_size): slot_size(slot_size) {
     constructor(id);
 }
 
@@ -34,40 +34,10 @@ void PersistentObject::constructor(uuid_t id) {
     }
 }
 
-PersistentObject::PersistentObject(bool dummy) {
-    if (!dummy) constructor(NULL);
-}
-
 PersistentObject::~PersistentObject() {
     if (log == NULL) return; // handle dummy objects
     // TODO handle re-assignment of objects (remap semantic log)
     Savitar_log_close(log);
-    // NVManager &manager = NVManager::getInstance();
-    // manager.lock();
-    // manager.destroy(this);
-    // manager.unlock();
-}
-
-class CommitRecord {
-    public:
-        CommitRecord(char *ptr, uint64_t commit_id, uint64_t method_tag) {
-            _ptr = ptr;
-            _commit_id = commit_id;
-            _method_tag = method_tag;
-        }
-
-        uint64_t getCommitId() const { return _commit_id; }
-        uint64_t getMethodTag() const { return _method_tag; }
-        char *getPtr() const { return _ptr; }
-
-    private:
-        char *_ptr;
-        uint64_t _commit_id;
-        uint64_t _method_tag;
-};
-
-inline bool operator< (const CommitRecord& lhs, const CommitRecord& rhs) {
-    return lhs.getCommitId() > rhs.getCommitId(); // Force ASC order for priority queue
 }
 
 /*
@@ -107,7 +77,7 @@ inline bool operator< (const CommitRecord& lhs, const CommitRecord& rhs) {
 void PersistentObject::Recover() {
     assert(log != nullptr);
     assert(sizeof(uint64_t) == 8); // We assume 2 * sizeof(uint64_t) == 16
-    uint64_t log_head = log->head;
+    const uint64_t log_head = log->head;
     char* ptr = (char*)log + log_head;
     const char* limit = (char*)log + log->tail; 
 
@@ -120,33 +90,23 @@ void PersistentObject::Recover() {
     printf("[%s] New head: %zu\n", uuid_prefix, log_head);
     printf("[%s] Log tail: %zu\n", uuid_prefix, log->tail);
 
+    const uint64_t magic_offset = sizeof(uint64_t);
+    const uint64_t data_offset = magic_offset + sizeof(uint64_t);
     // Creating data-structures to handle out-of-order entries
-    std::priority_queue<CommitRecord> commit_queue;
-    uint64_t slot_index = 0;
+    uint64_t slot_offset = log_head;
     while (ptr < limit) {
-        size_t data_size = sizeof(uint64_t); // Need to make it generic.
-        size_t slot_size = 2 * sizeof(uint64_t);
-        slot_size +=  data_size;
-        if (slot_size % CACHE_LINE_WIDTH != 0) {
-            slot_size += CACHE_LINE_WIDTH - (slot_size % CACHE_LINE_WIDTH);
-        }
         // 1. Read commit id and method tag from persistent log
         uint64_t commit_id = *((uint64_t *)ptr);
-        PRINT("[%s] Found record with commit order = %zu\n",
-                uuid_prefix, commit_id);
-        uint64_t magic_offset = sizeof(uint64_t);
         uint64_t magic = *((uint64_t *)(ptr + magic_offset));
-
         if (magic != REDO_LOG_MAGIC) { // free slot
-            AddFreeSlot(slot_index);
+            AddFreeSlot(slot_offset);
         } else { // filled slot.
-            uint64_t data_offset = magic_offset + sizeof(uint64_t);
             uint64_t* args = ((uint64_t*)(ptr + data_offset));
             uint64_t op_tag = 1; // Insert operation
-            this->Play(op_tag, args, slot_index, false);            
+            this->Play(op_tag, args, slot_offset, false);            
         }
         ptr += slot_size;
-        slot_index++;
+        slot_offset += slot_size;
     }
     printf("[%s] Finished recovering %s\n", uuid_prefix, uuid_str);
 }
