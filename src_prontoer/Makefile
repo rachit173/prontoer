@@ -38,10 +38,16 @@ worker.o: worker.cc worker.h constants.h
 $(TARGET): nv_object.o nv_log.o worker.o
 	$(AR) rvs $@ $^
 
-main.o: main.cc
+pos_main.o: pos_main.cc
 	$(CXX) -c $(CXXFLAGS) -o $@ $^
 
-tester: main.o ${TARGET} persistent_ordered_set.h
+pos_tester: pos_main.o ${TARGET} persistent_ordered_set.h
+	$(CXX) $(CXXFLAGS) $^ -o $@ -luuid -pthread -lpmem 
+
+pom_main.o: pom_main.cc
+	$(CXX) -c $(CXXFLAGS) -o $@ $^
+
+pom_tester: pom_main.o ${TARGET} persistent_ordered_map.h
 	$(CXX) $(CXXFLAGS) $^ -o $@ -luuid -pthread -lpmem 
 
 clean:
