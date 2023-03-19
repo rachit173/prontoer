@@ -1,4 +1,3 @@
-# Under development
 # Prontoer: Easier and Fast Persistency for volatile data structures w/ Lower P99 Latency.
 
 # Previous
